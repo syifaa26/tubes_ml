@@ -67,19 +67,28 @@ def evaluate(model_name, X, y_true, scaler):
 
 def main():
     print("Memuat dataset asli Kaggle...")
-    # Menggunakan sampel 100.000 agar komputasi tidak terlalu lama tapi sangat valid secara statistik (p-value kuat)
-    df = pd.read_csv('data/kaggle_card_transdata.csv').sample(n=100000, random_state=42)
+    df = pd.read_csv('data/kaggle_card_transdata.csv')
     
+    # REVISI KRUSIAL: Melakukan split data sama persis seperti saat training di notebook (random_state=123)
+    # Ini memastikan TIDAK ADA KEBOCORAN DATA (data leakage). Model murni diuji pada data yang belum pernah dilihat.
+    from sklearn.model_selection import train_test_split
+    _, test_df = train_test_split(df, test_size=0.2, random_state=123)
+    
+    # Boleh di-sample agar cepat, asalkan HANYA dari test_df (data uji murni)
+    if len(test_df) > 100000:
+        test_df = test_df.sample(n=100000, random_state=42)
+    
+    print(f"Menggunakan {len(test_df)} data uji (X_test murni) untuk robustness test...")
     print("Menyuntikkan noise (gangguan) sebesar 10% ke data numerik dan 5% ke data biner...")
-    noisy_df = inject_noise(df, numeric_noise_std=0.10, binary_flip_prob=0.05)
+    noisy_test_df = inject_noise(test_df, numeric_noise_std=0.10, binary_flip_prob=0.05)
     
-    y_true = noisy_df['fraud']
+    y_true = noisy_test_df['fraud']
     
     scaler = load_scaler()
     
     print("\nMulai proses pengujian (Robustness Test)...\n")
-    evaluate("model_random_forest.pkl", noisy_df, y_true, scaler)
-    evaluate("model_decision_tree.pkl", noisy_df, y_true, scaler)
+    evaluate("model_random_forest.pkl", noisy_test_df, y_true, scaler)
+    evaluate("model_decision_tree.pkl", noisy_test_df, y_true, scaler)
     
     print("Pengujian Robustness Selesai.")
 
